@@ -1,12 +1,57 @@
-﻿using System.IO;
-
-namespace Encryption_App
+﻿namespace Encryption_App
 {
+    using System;
+    using System.Globalization;
+    using System.IO;
+
     /// <summary>
     /// A static utility class for file management
     /// </summary>
     public static class FileStatics
     {
+        private const string TempFilePath = @"EncryptionApp\LocalFiles\";
+
+        private static readonly object LockForFileExclusivity = new object();
+
+        /// <summary>
+        /// Append 2 files
+        /// </summary>
+        /// <param name="startFile">The file to be the start of the appended data</param>
+        /// <param name="endFile">The file to be appended</param>
+        public static void AppendToFile(string startFile, string endFile)
+        {
+            // Create streams to read from the temporary file with the encrypted data to the file with the header
+            using (var reader = new BinaryReader(File.OpenRead(endFile)))
+            using (var writer = new BinaryWriter(new FileStream(startFile, FileMode.Append))
+            )
+            {
+                // IMPORTANT, FileMode.Append is used to not overwrite the header
+                long length = reader.BaseStream.Length;
+
+                // Continuously reads the stream in 1 mb sections until there is none left
+                while (true)
+                {
+                    if (length < 1024 * 1024 * 1024)
+                    {
+                        // Read all bytes into the array and write them
+                        var buff = new byte[length];
+                        int read = reader.Read(buff, 0, buff.Length);
+                        writer.Write(buff, 0, read);
+
+                        break;
+                    }
+                    else
+                    {
+                        // Read as many bytes as we allow into the array from the file and write them
+                        var buff = new byte[1024 * 1024 * 1024];
+                        int read = reader.Read(buff, 0, buff.Length);
+                        writer.Write(buff, 0, read);
+                        length -= read;
+                    }
+                }
+            }
+        }
+
         /// <summary>
         ///
         /// </summary>
@@ -21,7 +66,6 @@ namespace Encryption_App
             {
                 // Seek to the end of the header. IMPORTANT Do not change to Position - Position has no value checking - Seek does
                 reader.BaseStream.Seek(length, SeekOrigin.Begin);
-                // TODO Manage IO exceptions
 
                 long readLength = reader.BaseStream.Length - reader.BaseStream.Position;
 
@@ -50,37 +94,45 @@ namespace Encryption_App
         }
 
         /// <summary>
-        /// Append 2 files
+        /// Write to the log file for the app
         /// </summary>
-        /// <param name="startFile">The file to be the start of the appended data</param>
-        /// <param name="endFile">The file to be appended</param>
-        public static void AppendToFile(string startFile, string endFile)
+        /// <param name="toWrite">The objects to write to the file</param>
+        internal static void WriteToLogFile(params object[] toWrite)
         {
-            // Create streams to read from the temporary file with the encrypted data to the file with the header
-            using (var reader = new BinaryReader(File.OpenRead(endFile)))
-            using (var writer = new BinaryWriter(new FileStream(startFile, FileMode.Append))) // IMPORTANT, FileMode.Append is used to not overwrite the header
+            lock (LockForFileExclusivity)
             {
-                long length = reader.BaseStream.Length;
-
-                // Continuously reads the stream in 1 mb sections until there is none left
-                while (true)
+                if (!Directory.Exists(TempFilePath))
                 {
-                    if (length < 1024 * 1024 * 1024)
-                    {
-                        // Read all bytes into the array and write them
-                        var buff = new byte[length];
-                        int read = reader.Read(buff, 0, buff.Length);
-                        writer.Write(buff, 0, read);
+                    Directory.CreateDirectory(TempFilePath);
+                }
 
-                        break;
-                    }
-                    else
+                if (!File.Exists(TempFilePath + "Log.txt"))
+                {
+                    File.Create(TempFilePath + "Log.txt");
+                }
+
+                using (var fWriter = new StreamWriter(new FileStream(TempFilePath + "Log.txt", FileMode.Append)))
+                {
+                    fWriter.WriteLine('\n' + DateTime.Now.ToString(CultureInfo.CurrentCulture));
+                    foreach (object item in toWrite)
                     {
-                        // Read as many bytes as we allow into the array from the file and write them
-                        var buff = new byte[1024 * 1024 * 1024];
-                        int read = reader.Read(buff, 0, buff.Length);
-                        writer.Write(buff, 0, read);
-                        length -= read;
+                        switch (item)
+                        {
+                            case Exception exceptionCastedItem:
+                                fWriter.WriteLine("Exception: " + exceptionCastedItem.Message);
+                                fWriter.WriteLine(
+                                    (exceptionCastedItem.InnerException != null ? "Inner Exception: " : string.Empty)
+                                    + exceptionCastedItem.InnerException?.Message);
+                                break;
+
+                            case string stringCastedItem:
+                                fWriter.WriteLine(stringCastedItem);
+                                break;
+
+                            default:
+                                fWriter.WriteLine(item.ToString());
+                                break;
+                        }
                     }
                 }
             }

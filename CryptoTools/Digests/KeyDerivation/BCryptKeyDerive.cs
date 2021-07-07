@@ -2,6 +2,7 @@
 using System;
 
 #pragma warning disable 0414
+#pragma warning disable 1591
 
 namespace FactaLogicaSoftware.CryptoTools.Digests.KeyDerivation
 {
@@ -33,7 +34,7 @@ namespace FactaLogicaSoftware.CryptoTools.Digests.KeyDerivation
             throw new NotImplementedException();
         }
 
-        public override void TransformPerformance(PerformanceDerivative performanceDerivative, ulong milliseconds)
+        public static dynamic TransformPerformance(PerformanceDerivative performanceDerivative, ulong milliseconds)
         {
             throw new NotImplementedException();
         }
